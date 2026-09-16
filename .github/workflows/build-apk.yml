@@ -23,32 +23,72 @@ jobs:
           gradle-version: '8.10'
 
       - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
         run: |
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)"
+          fi
 
-          sdkmanager --version
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          echo "Using sdkmanager: $SDKMANAGER"
 
-      - name: Unzip project
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Prepare project
         run: |
           rm -rf project
-          mkdir project
-          unzip -q OmniaWorldAndroid_Chat_GitHub_Project_Fixed.zip
+          mkdir -p project
+
+          unzip -q OmniaWorldAndroid_Chat_GitHub_Project_Fixed.zip -d project
+
+          echo "Project files:"
+          find project -maxdepth 3 -type f | sort
+
+      - name: Find Android project
+        run: |
+          SETTINGS_FILE=$(find project -name settings.gradle -type f -print -quit)
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: settings.gradle not found"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+
+          echo "Found Android project:"
+          echo "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
       - name: Build APK
         run: |
-          cd project/OmniaWorldAndroid_Chat
-          gradle assembleDebug --no-daemon
+          cd "$PROJECT_DIR"
+
+          echo "Building from:"
+          pwd
+
+          echo "Project contents:"
+          ls -la
+
+          gradle clean assembleDebug --no-daemon --stacktrace
+
+      - name: Find APK
+        run: |
+          echo "Searching for APK..."
+          find "$PROJECT_DIR" -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: OmniaWorld-debug-apk
-          path: project/OmniaWorldAndroid_Chat/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            project/**/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
