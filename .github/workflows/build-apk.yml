@@ -41,8 +41,7 @@ jobs:
         run: |
           rm -rf project
           mkdir project
-          unzip -q OmniaWorldAndroid_Chat_GitHub_Project.zip -d project
-
+          unzip -q OmniaWorldAndroid_Chat_GitHub_Project_Fixed.zip
       - name: Build APK
         run: |
           cd project/OmniaWorldAndroid_Chat
